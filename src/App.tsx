@@ -1,92 +1,120 @@
-import React from 'react';
-import { Sparkles, Zap, Shield, Activity } from 'lucide-react';
-import { MenteeRequestInterface } from './components/MenteeRequestInterface';
-import { MentorRequestRadar } from './components/MentorRequestRadar';
-import { useMatchingEngine } from './hooks/useMatchingEngine';
+import React, { useState } from 'react';
+import { Sparkles, Loader2 } from 'lucide-react';
+import { OnboardingWizard } from './components/OnboardingWizard';
+import { ChatPage } from './components/ChatPage';
+import { SettingsPage } from './components/SettingsPage';
+import { useAppState } from './hooks/useAppState';
+
+type Page = 'onboarding' | 'chat' | 'settings';
 
 function App() {
-  const {
-    currentMentor,
-    activeMatch,
-    isMatchLoading,
-    countdown,
-    showRadarAlert,
-    submitMenteeRequest,
-    acceptMentorship,
-    declineMentorship,
-  } = useMatchingEngine();
+  const [page, setPage] = useState<Page>('chat');
 
-  const handleSubmitRequest = async (
-    name: string,
-    topic: string,
-    description: string,
-    urgency: 'low' | 'medium' | 'high' | 'critical'
-  ) => {
-    await submitMenteeRequest(name, topic, description, urgency);
-  };
+  const {
+    userId,
+    profile,
+    activeGigs,
+    matches,
+    loading,
+    totalEscrow,
+    saveProfile,
+    addMessage,
+    saveGig,
+    saveMatches,
+    updateMatchDecision,
+    releaseEscrow,
+  } = useAppState();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center animate-pulse">
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
+          <p className="text-slate-400 text-sm">Loading Milo...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile?.onboarding_complete || page === 'onboarding') {
+    return (
+      <OnboardingWizard
+        onComplete={async (data) => {
+          await saveProfile({ ...data, onboarding_complete: true });
+          setPage('chat');
+        }}
+      />
+    );
+  }
+
+  if (page === 'settings') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-cyan-900/8 via-transparent to-transparent pointer-events-none" />
+        <div className="relative z-10 h-screen">
+          <SettingsPage
+            profile={profile}
+            onSave={async (data) => {
+              await saveProfile(data);
+            }}
+            onBack={() => setPage('chat')}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-900/10 via-transparent to-transparent pointer-events-none" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-cyan-900/8 via-transparent to-transparent pointer-events-none" />
 
-      <div className="relative z-10 min-h-screen">
-        <header className="border-b border-slate-800/50 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      {/* Header */}
+      <header className="relative z-20 border-b border-slate-800/50 backdrop-blur-sm flex-shrink-0">
+        <div className="px-5 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-9 h-9 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center">
+                <Sparkles className="w-4.5 h-4.5 text-white" />
+              </div>
+              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-white tracking-tight leading-none">Milo</h1>
+              <p className="text-xs text-slate-500 leading-none mt-0.5">Campus Gig Marketplace</p>
+            </div>
+          </div>
+
+          {profile && (
             <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white tracking-tight">Skye</h1>
-                <p className="text-xs text-slate-500 -mt-0.5">Matching Marketplace</p>
+              {profile.avatar_url && (
+                <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-700" />
+              )}
+              <div className="hidden sm:block text-right">
+                <p className="text-sm text-white font-medium">{profile.name}</p>
+                <p className="text-xs text-slate-400">{profile.role} · {profile.campus_location || 'No location'}</p>
               </div>
             </div>
+          )}
+        </div>
+      </header>
 
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700/50">
-                <Activity className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm text-slate-400">
-                  <span className="text-emerald-400 font-medium">Live</span> System
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-slate-500" />
-                <span className="text-xs text-slate-500">Secured</span>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="max-w-7xl mx-auto px-6 py-8">
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 rounded-full bg-cyan-400" />
-              <span className="text-sm font-medium text-cyan-400">Production Dashboard</span>
-            </div>
-            <h2 className="text-3xl font-bold text-white">Real-Time Matching Engine</h2>
-            <p className="text-slate-400 mt-2">
-              Human-in-the-Loop mentoring marketplace with deterministic matching
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <MenteeRequestInterface
-              isMatchLoading={isMatchLoading}
-              onSubmitRequest={handleSubmitRequest}
-            />
-            <MentorRequestRadar
-              currentMentor={currentMentor}
-              activeMatch={activeMatch}
-              showRadarAlert={showRadarAlert}
-              countdown={countdown}
-              onAccept={acceptMentorship}
-              onDecline={declineMentorship}
-            />
-          </div>
-        </main>
+      {/* Body */}
+      <div className="relative z-10 flex-1 overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
+        <ChatPage
+          profile={profile}
+          userId={userId}
+          activeGigs={activeGigs}
+          matches={matches}
+          totalEscrow={totalEscrow}
+          onOpenSettings={() => setPage('settings')}
+          onSaveGig={saveGig}
+          onSaveMatches={saveMatches}
+          onUpdateMatchDecision={updateMatchDecision}
+          onReleaseEscrow={releaseEscrow}
+          onPersistMessage={addMessage}
+        />
       </div>
     </div>
   );

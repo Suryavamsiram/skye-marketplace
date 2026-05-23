@@ -3,118 +3,77 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Check if Supabase is properly configured
-const isConfigured = supabaseUrl &&
-  supabaseAnonKey &&
-  supabaseUrl !== 'https://your-project-id.supabase.co';
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export const supabase = isConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
-
-export const isRealDatabase = isConfigured;
-
-// Database Types
-export type Database = {
-  public: {
-    Tables: {
-      mentors: {
-        Row: {
-          id: string;
-          name: string;
-          email: string;
-          avatar_url: string | null;
-          specializations: string[];
-          rating: number;
-          total_sessions: number;
-          status: 'available' | 'busy' | 'offline';
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          email: string;
-          avatar_url?: string | null;
-          specializations?: string[];
-          rating?: number;
-          total_sessions?: number;
-          status?: 'available' | 'busy' | 'offline';
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-      mentees: {
-        Row: {
-          id: string;
-          name: string;
-          email: string;
-          avatar_url: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          email: string;
-          avatar_url?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-      mentorship_requests: {
-        Row: {
-          id: string;
-          mentee_id: string;
-          mentor_id: string | null;
-          topic: string;
-          description: string;
-          urgency: 'low' | 'medium' | 'high' | 'critical';
-          status: 'pending' | 'finding_mentors' | 'awaiting_acceptance' | 'accepted' | 'active' | 'expired' | 'declined' | 'completed';
-          matching_score: number | null;
-          time_remaining: number;
-          created_at: string;
-          accepted_at: string | null;
-          expires_at: string | null;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          mentee_id: string;
-          mentor_id?: string | null;
-          topic: string;
-          description: string;
-          urgency?: 'low' | 'medium' | 'high' | 'critical';
-          status?: 'pending' | 'finding_mentors' | 'awaiting_acceptance' | 'accepted' | 'active' | 'expired' | 'declined' | 'completed';
-          matching_score?: number | null;
-          time_remaining?: number;
-          created_at?: string;
-          accepted_at?: string | null;
-          expires_at?: string | null;
-          updated_at?: string;
-        };
-      };
-      system_logs: {
-        Row: {
-          id: string;
-          log_type: 'system' | 'matrix' | 'heartbeat' | 'webhook' | 'error';
-          message: string;
-          metadata: Record<string, unknown>;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          log_type: 'system' | 'matrix' | 'heartbeat' | 'webhook' | 'error';
-          message: string;
-          metadata?: Record<string, unknown>;
-          created_at?: string;
-        };
-      };
-    };
-  };
+export type UserProfile = {
+  id: string;
+  user_id: string;
+  name: string;
+  role: 'poster' | 'finder' | 'both';
+  campus_location: string;
+  max_walk_time_mins: 10 | 20 | 40;
+  pay_min: number;
+  pay_max: number;
+  skills_interests: string[];
+  onboarding_complete: boolean;
+  avatar_url: string | null;
+  bio: string;
+  latitude: number | null;
+  longitude: number | null;
+  skills: string[];
+  availability: 'flexible' | 'mornings' | 'afternoons' | 'evenings' | 'weekends_only';
+  created_at: string;
+  updated_at: string;
 };
 
-export type Mentor = Database['public']['Tables']['mentors']['Row'];
-export type Mentee = Database['public']['Tables']['mentees']['Row'];
-export type MentorshipRequest = Database['public']['Tables']['mentorship_requests']['Row'];
-export type SystemLog = Database['public']['Tables']['system_logs']['Row'];
+export type Gig = {
+  id: string;
+  user_id: string;
+  type: 'post' | 'search';
+  title: string;
+  content: string;
+  category: string;
+  pay_min: number;
+  pay_max: number;
+  currency: string;
+  campus_location: string;
+  is_remote: boolean;
+  poster_name: string;
+  status: 'open' | 'matched' | 'in_progress' | 'completed' | 'cancelled';
+  escrow_held: boolean;
+  escrow_amount: number;
+  escrow_released: boolean;
+  webhook_payload: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GigMatch = {
+  id: string;
+  gig_id: string;
+  user_id: string;
+  matched_user_name: string;
+  matched_user_id: string;
+  match_score: number;
+  title: string;
+  category: string;
+  pay_min: number;
+  pay_max: number;
+  campus_location: string;
+  walk_time_mins: number;
+  description: string;
+  decision: 'accepted' | 'rejected' | null;
+  escrow_status: 'pending' | 'held' | 'released' | 'disputed';
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  user_id: string;
+  role: 'user' | 'agent';
+  content: string;
+  message_type: 'text' | 'match_cards' | 'status' | 'error' | 'telemetry';
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
