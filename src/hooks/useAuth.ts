@@ -8,9 +8,13 @@ export function useAuth() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check active session
+    // Check active session FIRST (before demo data)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
+        // Clear demo data if real user is authenticated
+        localStorage.removeItem('demo_user');
+        localStorage.removeItem('demo_profile');
+        
         setUser({
           id: session.user.id,
           email: session.user.email || '',
@@ -18,6 +22,14 @@ export function useAuth() {
         });
         loadProfile(session.user.id);
       } else {
+        // Only check demo data if no real session exists
+        const demoUser = localStorage.getItem('demo_user');
+        const demoProfile = localStorage.getItem('demo_profile');
+
+        if (demoUser && demoProfile) {
+          setUser(JSON.parse(demoUser));
+          setProfile(JSON.parse(demoProfile));
+        }
         setLoading(false);
       }
     });
@@ -25,6 +37,10 @@ export function useAuth() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
+        // Clear demo data on auth change
+        localStorage.removeItem('demo_user');
+        localStorage.removeItem('demo_profile');
+        
         setUser({
           id: session.user.id,
           email: session.user.email || '',
@@ -117,6 +133,10 @@ export function useAuth() {
     setError(null);
     setLoading(true);
 
+    // Clear any demo user data before real login
+    localStorage.removeItem('demo_user');
+    localStorage.removeItem('demo_profile');
+
     const { data, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -142,15 +162,20 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    // Clear demo data on logout
+    localStorage.removeItem('demo_user');
+    localStorage.removeItem('demo_profile');
     setUser(null);
     setProfile(null);
   }, []);
 
   const loginAsDemo = useCallback(async (email: string) => {
     // For demo purposes, we fetch the profile by email and set it directly
-    // In production, this would use proper auth
     setError(null);
     setLoading(true);
+
+    // Clear any existing auth session first
+    await supabase.auth.signOut();
 
     const { data, error: profileError } = await supabase
       .from('user_profiles')
@@ -164,20 +189,22 @@ export function useAuth() {
       return { success: false, error: 'Demo profile not found' };
     }
 
+    const profileData = data as UserProfile;
+
     // Create a pseudo auth user for demo
     const demoAuthUser: AuthUser = {
-      id: (data as UserProfile).auth_user_id || crypto.randomUUID(),
-      email: (data as UserProfile).email,
-      created_at: (data as UserProfile).created_at,
+      id: profileData.auth_user_id || crypto.randomUUID(),
+      email: profileData.email,
+      created_at: profileData.created_at,
     };
-
-    setUser(demoAuthUser);
-    setProfile(data as UserProfile);
-    setLoading(false);
 
     // Store in localStorage for persistence
     localStorage.setItem('demo_user', JSON.stringify(demoAuthUser));
-    localStorage.setItem('demo_profile', JSON.stringify(data));
+    localStorage.setItem('demo_profile', JSON.stringify(profileData));
+
+    setUser(demoAuthUser);
+    setProfile(profileData);
+    setLoading(false);
 
     return { success: true };
   }, []);
@@ -186,17 +213,7 @@ export function useAuth() {
     setError(null);
   }, []);
 
-  // Check for demo user on mount
-  useEffect(() => {
-    const demoUser = localStorage.getItem('demo_user');
-    const demoProfile = localStorage.getItem('demo_profile');
-
-    if (demoUser && demoProfile) {
-      setUser(JSON.parse(demoUser));
-      setProfile(JSON.parse(demoProfile));
-      setLoading(false);
-    }
-  }, []);
+  // Removed duplicate demo user check - now handled in main useEffect
 
   return {
     user,
