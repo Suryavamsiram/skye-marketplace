@@ -25,6 +25,14 @@
   *::-webkit-scrollbar-thumb:hover {
     background-color: rgba(100, 116, 139, 0.7);
   }
+
+  body {
+    @apply font-sans antialiased;
+  }
+
+  .dark body {
+    @apply bg-slate-950 text-white;
+  }
 }
 
 @layer utilities {
@@ -43,3 +51,4 @@
     transform: translateY(0);
   }
 }
+
