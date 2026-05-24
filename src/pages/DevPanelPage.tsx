@@ -43,12 +43,20 @@ export function DevPanelPage({ profile }: DevPanelPageProps) {
   };
 
   const loginAsProfile = async (p: UserProfile) => {
-    const { user_id, email, name } = p;
+    const { user_id, email, name, auth_user_id } = p;
+
+    // Create proper auth user structure
+    const demoAuthUser = {
+      id: auth_user_id || user_id,
+      email,
+      created_at: new Date().toISOString()
+    };
 
     // Store in localStorage for demo persistence
-    localStorage.setItem('demo_user', JSON.stringify({ id: user_id, email, created_at: new Date().toISOString() }));
+    localStorage.setItem('demo_user', JSON.stringify(demoAuthUser));
     localStorage.setItem('demo_profile', JSON.stringify(p));
 
+    // Force reload to trigger auth state change
     window.location.href = '/';
   };
 
