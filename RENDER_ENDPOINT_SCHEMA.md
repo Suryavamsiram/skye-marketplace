@@ -43,6 +43,7 @@ This document describes the request and response schema for the matching/render 
     "gig_id": "string"                      // Unique gig identifier
   }
 }
+
 Example Request
 {
   "event_type": "CLIENT_REQUEST_DELEGATION",
@@ -131,3 +132,4 @@ Example Error Response
   "matches": [],
   "message": "No matching contractors found for this gig"
 }
+```
