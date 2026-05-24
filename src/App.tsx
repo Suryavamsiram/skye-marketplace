@@ -45,13 +45,21 @@ function AppContent() {
     return (
       <OnboardingWizard
         onComplete={async (data) => {
-          // Save profile
+          // Save profile with onboarding complete
           const { supabase } = await import('./lib/supabase');
-          await supabase
+          const { error } = await supabase
             .from('user_profiles')
             .update({ ...data, onboarding_complete: true })
             .eq('user_id', profile.user_id);
-          window.location.reload();
+
+          if (!error) {
+            // Redirect to home after successful onboarding
+            navigate('/');
+            window.location.reload();
+          } else {
+            console.error('Failed to complete onboarding:', error);
+            alert('Failed to save profile. Please try again.');
+          }
         }}
       />
     );
