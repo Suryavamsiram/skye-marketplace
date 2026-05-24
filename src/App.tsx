@@ -1,30 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Sparkles, Menu, X, Bell, Wallet, Home, Settings, Users, Moon, Sun, Monitor } from 'lucide-react';
+import { Menu, X, Bell, Wallet, Home, Settings, Users, Moon, Sun, Monitor, Sparkles } from './lib/lucideIcons';
 import { useAuth } from './hooks/useAuth';
 import { useTheme } from './hooks/useTheme';
 import { useNotifications } from './hooks/useNotifications';
-import { useChatSessions } from './hooks/useChatSessions';
 import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
 import { ChatPage } from './pages/ChatPage';
 import { WalletPage } from './pages/WalletPage';
 import { GigsBrowserPage } from './pages/GigsBrowserPage';
 import { DevPanelPage } from './pages/DevPanelPage';
-import { OnboardingWizard } from './components/OnboardingWizard';
+import { SettingsPage } from './pages/SettingsPage';
+import { LocalStateManager } from './lib/localState';
 
 function AppContent() {
-  const { user, profile, loading: authLoading, signUp, signIn, signOut, loginAsDemo, error: authError, clearError } = useAuth();
-  const { theme, resolvedTheme, setTheme } = useTheme();
+  const { session, profile, loading, loginAsDemo, createAccount, logout, refreshProfile } = useAuth();
+  const { theme, setTheme } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications(profile?.user_id || null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [showNotifications, setShowNotifications] = React.useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isOnAuthPage = location.pathname === '/login' || location.pathname === '/register';
-
-  if (authLoading) {
+  // Show loading
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center transition-colors">
         <div className="flex flex-col items-center gap-4">
@@ -37,34 +35,20 @@ function AppContent() {
     );
   }
 
-  if (!user && !isOnAuthPage) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!profile?.onboarding_complete && user && !isOnAuthPage && location.pathname !== '/onboarding') {
-    return (
-      <OnboardingWizard
-        onComplete={async (data) => {
-          // Save profile
-          const { supabase } = await import('./lib/supabase');
-          await supabase
-            .from('user_profiles')
-            .update({ ...data, onboarding_complete: true })
-            .eq('user_id', profile.user_id);
-          window.location.reload();
-        }}
-      />
-    );
-  }
-
-  if (isOnAuthPage) {
+  // Redirect to login if not authenticated
+  if (!session || !profile) {
     return (
       <Routes>
-        <Route path="/login" element={<LoginPage onLogin={signIn} onDemoLogin={loginAsDemo} error={authError} clearError={clearError} />} />
-        <Route path="/register" element={<RegisterPage onRegister={signUp} error={authError} clearError={clearError} />} />
+        <Route path="*" element={<LoginPage onLoginAsDemo={loginAsDemo} onCreateAccount={createAccount} />} />
       </Routes>
     );
   }
+
+  // Logout handler
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/';
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
@@ -112,7 +96,7 @@ function AppContent() {
             <NavItem icon={<Users className="w-5 h-5" />} label="Find Gigs" active={location.pathname === '/gigs'} onClick={() => { navigate('/gigs'); setSidebarOpen(false); }} />
             <NavItem icon={<Settings className="w-5 h-5" />} label="Settings" active={location.pathname === '/settings'} onClick={() => { navigate('/settings'); setSidebarOpen(false); }} />
 
-            {/* Dev Panel Toggle */}
+            {/* Dev Panel */}
             <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800">
               <NavItem icon={<Monitor className="w-5 h-5" />} label="Dev Panel" active={location.pathname === '/dev'} onClick={() => { navigate('/dev'); setSidebarOpen(false); }} />
             </div>
@@ -123,13 +107,13 @@ function AppContent() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-600 dark:text-slate-400">Theme</span>
               <div className="flex gap-1">
-                <button onClick={() => setTheme('light')} className={`p-1.5 rounded ${theme === 'light' ? 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900 dark:text-cyan-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                <button onClick={() => setTheme('light')} className={`p-1.5 rounded ${theme === 'light' ? 'bg-cyan-100 dark:bg-cyan-900 text-cyan-600 dark:text-cyan-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
                   <Sun className="w-4 h-4" />
                 </button>
-                <button onClick={() => setTheme('dark')} className={`p-1.5 rounded ${theme === 'dark' ? 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900 dark:text-cyan-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                <button onClick={() => setTheme('dark')} className={`p-1.5 rounded ${theme === 'dark' ? 'bg-cyan-100 dark:bg-cyan-900 text-cyan-600 dark:text-cyan-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
                   <Moon className="w-4 h-4" />
                 </button>
-                <button onClick={() => setTheme('system')} className={`p-1.5 rounded ${theme === 'system' ? 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900 dark:text-cyan-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                <button onClick={() => setTheme('system')} className={`p-1.5 rounded ${theme === 'system' ? 'bg-cyan-100 dark:bg-cyan-900 text-cyan-600 dark:text-cyan-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
                   <Monitor className="w-4 h-4" />
                 </button>
               </div>
@@ -140,13 +124,13 @@ function AppContent() {
           <div className="p-4 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
-                {profile?.name?.charAt(0) || '?'}
+                {profile.name.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{profile?.name}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{profile?.email}</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{profile.name}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{profile.email}</p>
               </div>
-              <button onClick={signOut} className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline">Logout</button>
+              <button onClick={handleLogout} className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline">Logout</button>
             </div>
           </div>
         </div>
@@ -160,11 +144,11 @@ function AppContent() {
       {/* Main Content */}
       <main className="lg:ml-64 pt-14 lg:pt-0 min-h-screen">
         <Routes>
-          <Route path="/" element={<ChatPage profile={profile!} userId={profile?.user_id || ''} />} />
-          <Route path="/wallet" element={<WalletPage profile={profile!} />} />
-          <Route path="/gigs" element={<GigsBrowserPage profile={profile!} />} />
-          <Route path="/dev" element={<DevPanelPage profile={profile!} />} />
-          <Route path="/onboarding" element={<OnboardingWizard onComplete={async () => {}} />} />
+          <Route path="/" element={<ChatPage profile={profile} onRefresh={refreshProfile} />} />
+          <Route path="/wallet" element={<WalletPage profile={profile} onRefresh={refreshProfile} />} />
+          <Route path="/gigs" element={<GigsBrowserPage profile={profile} />} />
+          <Route path="/settings" element={<SettingsPage profile={profile} onRefresh={refreshProfile} />} />
+          <Route path="/dev" element={<DevPanelPage profile={profile} loginAsDemo={loginAsDemo} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
