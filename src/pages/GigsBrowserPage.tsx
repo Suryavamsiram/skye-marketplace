@@ -1,68 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MapPin, DollarSign, Clock, CheckCircle, ChevronDown } from 'lucide-react';
-import { supabase, type UserProfile, type Gig } from '../lib/supabase';
+import { Search, MapPin, DollarSign, Clock, CheckCircle, ChevronDown } from '../lib/lucideIcons';
+import { LocalStateManager, type DemoProfile, type LocalGig } from '../lib/localState';
 
 interface GigsBrowserPageProps {
-  profile: UserProfile;
+  profile: DemoProfile;
 }
 
 export function GigsBrowserPage({ profile }: GigsBrowserPageProps) {
-  const [gigs, setGigs] = useState<Gig[]>([]);
+  const [gigs, setGigs] = useState<LocalGig[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState({
-    category: '',
-    minPay: 0,
-    maxPay: 500,
-    location: '',
-  });
+  const [filter, setFilter] = useState({ category: '', minPay: 0, maxPay: 500, location: '' });
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     loadGigs();
   }, [profile.user_id]);
 
-  const loadGigs = async () => {
+  const loadGigs = () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('gigs')
-      .select('*')
-      .eq('type', 'post')
-      .eq('status', 'open')
-      .neq('user_id', profile.user_id)
-      .order('created_at', { ascending: false });
-
-    if (data) setGigs(data as Gig[]);
+    const availableGigs = LocalStateManager.getAvailableGigs(profile.user_id);
+    setGigs(availableGigs);
     setLoading(false);
   };
 
-  const handleAcceptGig = async (gig: Gig) => {
+  const handleAcceptGig = (gig: LocalGig) => {
     // Check balance
-    if (profile.balance < gig.pay_max) {
+    const currentBalance = LocalStateManager.getUserProfile(profile.user_id)?.balance || profile.balance;
+    if (currentBalance < gig.pay_max && gig.user_id !== profile.user_id) {
       alert('Insufficient balance. Add funds to wallet first.');
       return;
     }
 
-    // Update gig status
-    await supabase
-      .from('gigs')
-      .update({
-        status: 'matched',
-        accepted_by_user_id: profile.user_id,
-        accepted_by_name: profile.name,
-        started_at: new Date().toISOString(),
-      })
-      .eq('id', gig.id);
+    // Update gig
+    LocalStateManager.updateGig(gig.id, {
+      status: 'matched',
+      accepted_by_user_id: profile.user_id,
+      accepted_by_name: profile.name,
+      started_at: new Date().toISOString(),
+    });
 
-    // Notify poster
-    await supabase.from('notifications').insert([{
-      user_id: gig.user_id,
-      type: 'gig_accepted',
-      title: 'Gig Accepted!',
-      message: profile.name + ' has accepted your gig: ' + gig.title,
-      data: { gig_id: gig.id, contractor_id: profile.user_id },
-    }]);
-
-    alert('Gig accepted! Check your wallet for active gigs.');
+    alert('Gig accepted! Check Dev Panel to manage it.');
     loadGigs();
   };
 
@@ -90,10 +67,7 @@ export function GigsBrowserPage({ profile }: GigsBrowserPageProps) {
               placeholder="Search gigs..."
               className="flex-1 bg-transparent outline-none text-slate-900 dark:text-white"
             />
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-            >
+            <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-1 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
               Filters <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
             </button>
           </div>
@@ -103,7 +77,7 @@ export function GigsBrowserPage({ profile }: GigsBrowserPageProps) {
               <select
                 value={filter.category}
                 onChange={(e) => setFilter({ ...filter, category: e.target.value })}
-                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white"
               >
                 <option value="">All Categories</option>
                 {categories.map((cat) => (
@@ -111,43 +85,23 @@ export function GigsBrowserPage({ profile }: GigsBrowserPageProps) {
                 ))}
               </select>
 
-              <input
-                type="number"
-                placeholder="Min Pay"
-                value={filter.minPay || ''}
-                onChange={(e) => setFilter({ ...filter, minPay: parseInt(e.target.value) || 0 })}
-                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
-              />
+              <input type="number" placeholder="Min Pay" value={filter.minPay || ''} onChange={(e) => setFilter({ ...filter, minPay: parseInt(e.target.value) || 0 })} className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white" />
 
-              <input
-                type="number"
-                placeholder="Max Pay"
-                value={filter.maxPay === 500 ? '' : filter.maxPay}
-                onChange={(e) => setFilter({ ...filter, maxPay: parseInt(e.target.value) || 500 })}
-                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
-              />
+              <input type="number" placeholder="Max Pay" value={filter.maxPay === 500 ? '' : filter.maxPay} onChange={(e) => setFilter({ ...filter, maxPay: parseInt(e.target.value) || 500 })} className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white" />
 
-              <input
-                type="text"
-                placeholder="Location"
-                value={filter.location}
-                onChange={(e) => setFilter({ ...filter, location: e.target.value })}
-                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
-              />
+              <input type="text" placeholder="Location" value={filter.location} onChange={(e) => setFilter({ ...filter, location: e.target.value })} className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white" />
             </div>
           )}
         </div>
 
         {/* Gigs Grid */}
         {loading ? (
-          <div className="text-center py-12">
-            <p className="text-slate-500">Loading gigs...</p>
-          </div>
+          <div className="text-center py-12"><p className="text-slate-500">Loading gigs...</p></div>
         ) : filteredGigs.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
             <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 dark:text-slate-400">No gigs match your criteria</p>
-            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Try adjusting your filters</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Go to Dev Panel to generate sample gigs</p>
           </div>
         ) : (
           <div className="grid gap-4">
@@ -155,34 +109,19 @@ export function GigsBrowserPage({ profile }: GigsBrowserPageProps) {
               <div key={gig.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 hover:border-cyan-300 dark:hover:border-cyan-700 transition-colors">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <span className="inline-block px-2 py-0.5 bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 text-xs font-medium rounded-full mb-2">
-                      {gig.category}
-                    </span>
+                    <span className="inline-block px-2 py-0.5 bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 text-xs font-medium rounded-full mb-2">{gig.category}</span>
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{gig.title}</h3>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{gig.content}</p>
 
                     <div className="flex flex-wrap gap-3 mt-3 text-sm text-slate-500 dark:text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <DollarSign className="w-4 h-4 text-green-500" />
-                        ${gig.pay_min} - ${gig.pay_max}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4 text-blue-500" />
-                        {gig.campus_location}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4 text-amber-500" />
-                        {new Date(gig.created_at).toLocaleDateString()}
-                      </span>
+                      <span className="flex items-center gap-1"><DollarSign className="w-4 h-4 text-green-500" />${gig.pay_min} - ${gig.pay_max}</span>
+                      <span className="flex items-center gap-1"><MapPin className="w-4 h-4 text-blue-500" />{gig.campus_location}</span>
+                      <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-amber-500" />{new Date(gig.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleAcceptGig(gig)}
-                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-medium rounded-lg flex items-center gap-2"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Accept
+                  <button onClick={() => handleAcceptGig(gig)} className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-medium rounded-lg flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" /> Accept
                   </button>
                 </div>
 

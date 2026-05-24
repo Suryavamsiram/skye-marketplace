@@ -1,213 +1,121 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase, type UserProfile, type AuthUser } from '../lib/supabase';
+import { useState, useCallback, useEffect } from 'react';
+import { LocalStateManager, DEMO_PROFILES, type DemoProfile, type LocalSession } from '../lib/localState';
+
+export type { DemoProfile } from '../lib/localState';
 
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [session, setSession] = useState<LocalSession | null>(null);
+  const [profile, setProfile] = useState<DemoProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
+  // Initialize from localStorage on mount
   useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          created_at: session.user.created_at,
-        });
-        loadProfile(session.user.id);
-      } else {
-        setLoading(false);
+    const storedSession = LocalStateManager.getSession();
+    if (storedSession) {
+      setSession(storedSession);
+      const userProfile = LocalStateManager.getUserProfile(storedSession.user_id);
+      if (userProfile) {
+        setProfile(userProfile);
       }
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          created_at: session.user.created_at,
-        });
-        loadProfile(session.user.id);
-      } else {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const loadProfile = async (authUserId: string) => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('auth_user_id', authUserId)
-      .maybeSingle();
-
-    if (data) {
-      setProfile(data as UserProfile);
     }
     setLoading(false);
-  };
-
-  const signUp = useCallback(async (email: string, password: string, name: string, role: 'poster' | 'finder' | 'both' = 'both') => {
-    setError(null);
-    setLoading(true);
-
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return { success: false, error: authError.message };
-    }
-
-    if (!authData.user) {
-      setError('Failed to create account');
-      setLoading(false);
-      return { success: false, error: 'Failed to create account' };
-    }
-
-    // Create user profile
-    const userId = crypto.randomUUID();
-    const { error: profileError } = await supabase
-      .from('user_profiles')
-      .insert([{
-        user_id: userId,
-        auth_user_id: authData.user.id,
-        email: email,
-        name: name,
-        role: role,
-        campus_location: 'Student Union',
-        pay_min: 15,
-        pay_max: 50,
-        skills_interests: [],
-        skills: [],
-        onboarding_complete: false,
-        balance: 100,
-        total_earned: 0,
-        total_spent: 0,
-      }]);
-
-    if (profileError) {
-      setError(profileError.message);
-      setLoading(false);
-      return { success: false, error: profileError.message };
-    }
-
-    setUser({
-      id: authData.user.id,
-      email: authData.user.email || '',
-      created_at: authData.user.created_at,
-    });
-
-    setLoading(false);
-    return { success: true };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    setError(null);
-    setLoading(true);
-
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return { success: false, error: authError.message };
-    }
-
-    if (data.user) {
-      setUser({
-        id: data.user.id,
-        email: data.user.email || '',
-        created_at: data.user.created_at,
-      });
-    }
-
-    setLoading(false);
-    return { success: true };
-  }, []);
-
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-  }, []);
-
-  const loginAsDemo = useCallback(async (email: string) => {
-    // For demo purposes, we fetch the profile by email and set it directly
-    // In production, this would use proper auth
-    setError(null);
-    setLoading(true);
-
-    const { data, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('email', email)
-      .maybeSingle();
-
-    if (profileError || !data) {
-      setError('Demo profile not found');
-      setLoading(false);
+  // Login as demo profile
+  const loginAsDemo = useCallback((email: string) => {
+    const demoProfile = DEMO_PROFILES.find(p => p.email === email);
+    if (!demoProfile) {
       return { success: false, error: 'Demo profile not found' };
     }
 
-    // Create a pseudo auth user for demo
-    const demoAuthUser: AuthUser = {
-      id: (data as UserProfile).auth_user_id || crypto.randomUUID(),
-      email: (data as UserProfile).email,
-      created_at: (data as UserProfile).created_at,
+    const newSession: LocalSession = {
+      user_id: demoProfile.user_id,
+      name: demoProfile.name,
+      email: demoProfile.email,
+      is_demo: true,
+      created_at: new Date().toISOString(),
     };
 
-    setUser(demoAuthUser);
-    setProfile(data as UserProfile);
-    setLoading(false);
-
-    // Store in localStorage for persistence
-    localStorage.setItem('demo_user', JSON.stringify(demoAuthUser));
-    localStorage.setItem('demo_profile', JSON.stringify(data));
+    LocalStateManager.setSession(newSession);
+    setSession(newSession);
+    setProfile(demoProfile);
 
     return { success: true };
   }, []);
 
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
-  // Check for demo user on mount
-  useEffect(() => {
-    const demoUser = localStorage.getItem('demo_user');
-    const demoProfile = localStorage.getItem('demo_profile');
-
-    if (demoUser && demoProfile) {
-      setUser(JSON.parse(demoUser));
-      setProfile(JSON.parse(demoProfile));
-      setLoading(false);
+  // Create new user account
+  const createAccount = useCallback((name: string, email: string, role: 'poster' | 'finder' | 'both' = 'both'): { success: boolean; error?: string } => {
+    // Check if email already in use
+    const demoEmailUsed = DEMO_PROFILES.some(p => p.email.toLowerCase() === email.toLowerCase());
+    if (demoEmailUsed) {
+      return { success: false, error: 'Email already in use by demo profile' };
     }
+
+    const userId = 'user-' + crypto.randomUUID();
+    const newProfile: DemoProfile = {
+      user_id: userId,
+      name,
+      email,
+      role,
+      campus_location: 'Student Union',
+      skills: [],
+      skills_interests: [],
+      pay_min: 15,
+      pay_max: 50,
+      balance: 100, // Starting balance
+      total_earned: 0,
+      total_spent: 0,
+      bio: '',
+      availability: 'flexible',
+      max_walk_time_mins: 20,
+    };
+
+    const newSession: LocalSession = {
+      user_id: userId,
+      name,
+      email,
+      is_demo: false,
+      created_at: new Date().toISOString(),
+    };
+
+    LocalStateManager.setUserProfile(userId, newProfile);
+    LocalStateManager.setSession(newSession);
+
+    setSession(newSession);
+    setProfile(newProfile);
+
+    return { success: true };
   }, []);
+
+  // Logout
+  const logout = useCallback(() => {
+    LocalStateManager.clearSession();
+    setSession(null);
+    setProfile(null);
+  }, []);
+
+  // Refresh profile (get latest balance, etc.)
+  const refreshProfile = useCallback(() => {
+    if (!session) return;
+    const latestProfile = LocalStateManager.getUserProfile(session.user_id);
+    if (latestProfile) {
+      setProfile(latestProfile);
+    }
+  }, [session]);
+
+  // Check if logged in
+  const isLoggedIn = session !== null;
+  const isDemo = session?.is_demo ?? false;
 
   return {
-    user,
+    session,
     profile,
     loading,
-    error,
-    signUp,
-    signIn,
-    signOut,
+    isLoggedIn,
+    isDemo,
     loginAsDemo,
-    clearError,
-    refreshProfile: user ? () => loadProfile(user.id) : undefined,
+    createAccount,
+    logout,
+    refreshProfile,
   };
 }
